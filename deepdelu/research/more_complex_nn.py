@@ -14,8 +14,8 @@ class network:
         self.shape = shape
         self.acfunc = activation
         
-        self.weights = [uniform((s, shape[i])) for i, s in enumerate(shape[1:])]
-        self.biases = [uniform(s) for s in shape[1:]]
+        self.weights = [uniform((s, shape[i]))/10 for i, s in enumerate(shape[1:])]
+        self.biases = [numpy.zeros((s,)) for s in shape[1:]]
         
         self.depth = len(shape) - 1
         self.activation :list[numpy.ndarray] # store activation for backpropagation

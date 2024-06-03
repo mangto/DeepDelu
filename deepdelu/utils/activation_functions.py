@@ -39,3 +39,7 @@ def tanh(value, Derivative=False):
 
     if (Derivative == False): return numpy.tanh(value)
     else: return 1/numpy.cosh(value)
+    
+def softmax(value, Derivative = False):
+    if (Derivative == False): e_x = numpy.exp(value); return e_x / e_x.sum()
+    else: s = softmax(value).reshape(-1,1); return numpy.diag(numpy.diagflat(s) - numpy.dot(s, s.T))

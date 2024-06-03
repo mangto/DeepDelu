@@ -3,6 +3,7 @@ from pathlib import Path
 
 from deepdelu import research
 from deepdelu.utils import *
+from deepdelu.engine.tensor import Tensor
 
 __all__ = [
     'research'

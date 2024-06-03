@@ -21,7 +21,7 @@ class network:
         pass
     
     
-    def __call__(self, x:int|float) -> float:
+    def __call__(self, x:float) -> float:
         return self.forward(x)
     
     def __str__(self) -> str:
@@ -30,7 +30,7 @@ class network:
     def __repr__(self) -> str:
         return f"f(x) = {round(self.weight, 2)}x + {round(self.bias, 2)}"
     
-    def forward(self, x:int|float) -> float:
+    def forward(self, x:float) -> float:
         '''
         Feed Forward Linear-Equation Neuron Neural Network
         '''
@@ -39,7 +39,7 @@ class network:
         
         return self.weight * x + self.bias
     
-    def backpropagation(self, x:int|float, target:int|float, lrate:float=0.01) -> float:
+    def backpropagation(self, x:float, target:float, lrate:float=0.01) -> float:
         '''
         Train Network With Backpropagation
         '''
