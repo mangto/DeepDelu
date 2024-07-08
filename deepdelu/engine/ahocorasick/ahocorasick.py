@@ -29,6 +29,3 @@ class ahocorasick:
 
 
         return
-
-if __name__ == "__main__":
-    network = ahocorasick()

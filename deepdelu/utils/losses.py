@@ -51,6 +51,6 @@ def CategoricalCrossEntropy(y_true:np.ndarray, y_pred:np.ndarray,
     if (not derivative):
         cce = -1/len(y_true) * np.sum(np.sum(y_true * np.log(y_pred+1e-15)))
     else:
-        ...
+        cce = -y_true/y_pred + (1-y_true)/(1-y_pred)
 
     return cce

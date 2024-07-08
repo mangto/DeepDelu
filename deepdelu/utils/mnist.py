@@ -1,93 +1,293 @@
-import os
-import functools
-import operator
 import gzip
+import os
 import struct
-import array
-import tempfile
-from urllib.request import urlretrieve
-from urllib.parse import urljoin
-import numpy
+from array import array
+import random
+import zipfile
 
-datasets_url = 'http://yann.lecun.com/exdb/mnist/'
-temporary_dir = tempfile.gettempdir
+_allowed_modes = (
+    'vanilla',
+    'randomly_binarized',
+    'rounded_binarized',
+)
 
+_allowed_return_types = (
+    'lists',
+    'numpy',
+)
 
-class IdxDecodeError(ValueError):
-    """Raised when an invalid idx file is parsed."""
+np = None
+def _import_numpy():
+    global np
+    if np is None:
+        try:
+            import numpy as _np
+        except ImportError as e:
+            raise MNISTException(
+                "need to have numpy installed to return numpy arrays."\
+                +" Otherwise, please set return_type='lists' in constructor."
+            )
+        np = _np
+    else:
+        pass
+    return np
+
+class MNISTException(Exception):
     pass
 
+class MNIST(object):
+    def __init__(self, path='.\\deepdelu\\utils\\mnist_data', mode='vanilla', return_type='lists', gz=False):
+        self.path = path
 
-def download_file(fname, target_dir=None, force=False):
-    target_dir = target_dir or temporary_dir()
-    target_fname = os.path.join(target_dir, fname)
+        assert mode in _allowed_modes, \
+            "selected mode '{}' not in {}".format(mode,_allowed_modes)
 
-    if force or not os.path.isfile(target_fname):
-        url = urljoin(datasets_url, fname)
-        urlretrieve(url, target_fname)
+        self._mode = mode
 
-    return target_fname
+        assert return_type in _allowed_return_types, \
+            "selected return_type '{}' not in {}".format(
+                return_type,
+                _allowed_return_types
+            )
 
+        self._return_type = return_type
 
-def parse_idx(fd):
-    DATA_TYPES = {0x08: 'B',  # unsigned byte
-                  0x09: 'b',  # signed byte
-                  0x0b: 'h',  # short (2 bytes)
-                  0x0c: 'i',  # int (4 bytes)
-                  0x0d: 'f',  # float (4 bytes)
-                  0x0e: 'd'}  # double (8 bytes)
+        self.test_img_fname = 't10k-images.idx3-ubyte'
+        self.test_lbl_fname = 't10k-labels.idx1-ubyte'
 
-    header = fd.read(4)
-    if len(header) != 4:
-        raise IdxDecodeError('Invalid IDX file, '
-                             'file empty or does not contain a full header.')
+        self.train_img_fname = 'train-images.idx3-ubyte'
+        self.train_lbl_fname = 'train-labels.idx1-ubyte'
 
-    zeros, data_type, num_dimensions = struct.unpack('>HBB', header)
+        self.gz = gz
+        self.emnistRotate = False
 
-    if zeros != 0:
-        raise IdxDecodeError('Invalid IDX file, '
-                             'file must start with two zero bytes. '
-                             'Found 0x%02x' % zeros)
+        self.test_images = []
+        self.test_labels = []
 
-    try:
-        data_type = DATA_TYPES[data_type]
-    except KeyError:
-        raise IdxDecodeError('Unknown data type '
-                             '0x%02x in IDX file' % data_type)
+        self.train_images = []
+        self.train_labels = []
 
-    dimension_sizes = struct.unpack('>' + 'I' * num_dimensions,
-                                    fd.read(4 * num_dimensions))
+    def select_emnist(self, dataset='digits'):
+        '''
+        Select one of the EMNIST datasets
 
-    data = array.array(data_type, fd.read())
-    data.byteswap()  # looks like array.array reads data as little endian
+        Available datasets:
+            - balanced
+            - byclass
+            - bymerge
+            - digits
+            - letters
+            - mnist
+        '''
+        template = 'emnist-{0}-{1}-{2}-idx{3}-ubyte'
 
-    expected_items = functools.reduce(operator.mul, dimension_sizes)
-    if len(data) != expected_items:
-        raise IdxDecodeError('IDX file has wrong number of items. '
-                             'Expected: %d. Found: %d' % (expected_items,
-                                                          len(data)))
+        self.gz = True
+        self.emnistRotate = True
 
-    return numpy.array(data).reshape(dimension_sizes)
+        self.test_img_fname = template.format(dataset, 'test', 'images', 3)
+        self.test_lbl_fname = template.format(dataset, 'test', 'labels', 1)
 
+        self.train_img_fname = template.format(dataset, 'train', 'images', 3)
+        self.train_lbl_fname = template.format(dataset, 'train', 'labels', 1)
 
-def download_and_parse_mnist_file(fname, target_dir=None, force=False):
-    fname = download_file(fname, target_dir=target_dir, force=force)
-    fopen = gzip.open if os.path.splitext(fname)[1] == '.gz' else open
-    with fopen(fname, 'rb') as fd:
-        return parse_idx(fd)
+    @property
+    def mode(self):
+        return self._mode
 
+    @property
+    def return_type(self):
+        return self._return_type
 
-def train_images():
-    return download_and_parse_mnist_file('train-images-idx3-ubyte.gz')
+    def load_testing(self):
+        ims, labels = self.load(os.path.join(self.path, self.test_img_fname),
+                                os.path.join(self.path, self.test_lbl_fname))
 
+        self.test_images = self.process_images(ims)
+        self.test_labels = self.process_labels(labels)
 
-def test_images():
-    return download_and_parse_mnist_file('t10k-images-idx3-ubyte.gz')
+        return self.test_images, self.test_labels
 
+    def load_training(self):
+        ims, labels = self.load(os.path.join(self.path, self.train_img_fname),
+                                os.path.join(self.path, self.train_lbl_fname))
 
-def train_labels():
-    return download_and_parse_mnist_file('train-labels-idx1-ubyte.gz')
+        self.train_images = self.process_images(ims)
+        self.train_labels = self.process_labels(labels)
 
+        return self.train_images, self.train_labels
 
-def test_labels():
-    return download_and_parse_mnist_file('t10k-labels-idx1-ubyte.gz')
+    def load_training_in_batches(self, batch_size):
+        if type(batch_size) is not int:
+            raise ValueError('batch_size must be a int number')
+        batch_sp = 0
+        last = False
+        self._get_dataset_size(os.path.join(self.path, self.train_img_fname),
+                               os.path.join(self.path, self.train_lbl_fname))
+
+        while True:
+            ims, labels = self.load(
+                os.path.join(self.path, self.train_img_fname),
+                os.path.join(self.path, self.train_lbl_fname),
+                batch=[batch_sp, batch_size])
+
+            self.train_images = self.process_images(ims)
+            self.train_labels = self.process_labels(labels)
+
+            yield self.train_images, self.train_labels
+
+            if last:
+                break
+
+            batch_sp += batch_size
+            if batch_sp + batch_size > self.dataset_size:
+                last = True
+                batch_size = self.dataset_size - batch_sp
+
+    def _get_dataset_size(self, path_img, path_lbl):
+        with self.opener(path_lbl, 'rb') as file:
+            magic, lb_size = struct.unpack(">II", file.read(8))
+            if magic != 2049:
+                raise ValueError('Magic number mismatch, expected 2049,'
+                                 'got {}'.format(magic))
+
+        with self.opener(path_img, 'rb') as file:
+            magic, im_size = struct.unpack(">II", file.read(8))
+            if magic != 2051:
+                raise ValueError('Magic number mismatch, expected 2051,'
+                                 'got {}'.format(magic))
+
+        if lb_size != im_size:
+            raise ValueError('image size is not equal to label size')
+
+        self.dataset_size = lb_size
+
+    def process_images(self, images):
+        if self.return_type is 'lists':
+            return self.process_images_to_lists(images)
+        elif self.return_type is 'numpy':
+            return self.process_images_to_numpy(images)
+        else:
+            raise MNISTException("unknown return_type '{}'".format(self.return_type))
+
+    def process_labels(self, labels):
+        if self.return_type is 'lists':
+            return labels
+        elif self.return_type is 'numpy':
+            _np = _import_numpy()
+            return _np.array(labels)
+        else:
+            raise MNISTException("unknown return_type '{}'".format(self.return_type))
+
+    def process_images_to_numpy(self,images):
+        _np = _import_numpy()
+
+        images_np = _np.array(images)
+
+        if self.mode == 'vanilla':
+            pass
+
+        elif self.mode == 'randomly_binarized':
+            r = _np.random.random(images_np.shape)
+            images_np = (r <= ( images_np / 255)).astype('int') # bool to 0/1
+
+        elif self.mode == 'rounded_binarized':
+            images_np = ((images_np / 255) > 0.5).astype('int') # bool to 0/1
+
+        else:
+            raise MNISTException("unknown mode '{}'".format(self.mode))
+
+        return images_np
+
+    def process_images_to_lists(self,images):
+        if self.mode == 'vanilla':
+            pass
+
+        elif self.mode == 'randomly_binarized':
+            for i in range(len(images)):
+                for j in range(len(images[i])):
+                    pixel = images[i][j]
+                    images[i][j] = int(random.random() <= pixel/255) # bool to 0/1
+
+        elif self.mode == 'rounded_binarized':
+            for i in range(len(images)):
+                for j in range(len(images[i])):
+                    pixel = images[i][j]
+                    images[i][j] = int(pixel/255 > 0.5) # bool to 0/1
+        else:
+            raise MNISTException("unknown mode '{}'".format(self.mode))
+
+        return images
+
+    def opener(self, path_fn, *args, **kwargs):
+        try:
+            if self.gz:
+                return gzip.open(path_fn + '.gz', *args, **kwargs)
+            else:
+                return open(path_fn, *args, **kwargs)
+        except FileNotFoundError:
+            with zipfile.ZipFile('.\\deepdelu\\utils\\mnist_data\\mnist.zip', 'r') as zip_ref:
+                zip_ref.extractall('.\\deepdelu\\utils\\mnist_data')
+
+            return self.opener(path_fn, *args, **kwargs)
+
+    def load(self, path_img, path_lbl, batch=None):
+        if batch is not None:
+            if type(batch) is not list or len(batch) is not 2:
+                raise ValueError('batch should be a 1-D list'
+                                 '(start_point, batch_size)')
+
+        with self.opener(path_lbl, 'rb') as file:
+            magic, size = struct.unpack(">II", file.read(8))
+            if magic != 2049:
+                raise ValueError('Magic number mismatch, expected 2049,'
+                                 'got {}'.format(magic))
+
+            labels = array("B", file.read())
+
+        with self.opener(path_img, 'rb') as file:
+            magic, size, rows, cols = struct.unpack(">IIII", file.read(16))
+            if magic != 2051:
+                raise ValueError('Magic number mismatch, expected 2051,'
+                                 'got {}'.format(magic))
+
+            image_data = array("B", file.read())
+
+        if batch is not None:
+            image_data = image_data[batch[0] * rows * cols:\
+                                    (batch[0] + batch[1]) * rows * cols]
+            labels = labels[batch[0]: batch[0] + batch[1]]
+            size = batch[1]
+
+        images = []
+        for i in range(size):
+            images.append([0] * rows * cols)
+
+        for i in range(size):
+            images[i][:] = image_data[i * rows * cols:(i + 1) * rows * cols]
+
+            # for some reason EMNIST is mirrored and rotated
+            if self.emnistRotate:
+                x = image_data[i * rows * cols:(i + 1) * rows * cols]
+
+                subs = []
+                for r in range(rows):
+                    subs.append(x[(rows - r) * cols - cols:(rows - r)*cols])
+
+                l = list(zip(*reversed(subs)))
+                fixed = [item for sublist in l for item in sublist]
+
+                images[i][:] = fixed
+
+        return images, labels
+
+    @classmethod
+    def display(cls, img, width=28, threshold=200):
+        render = ''
+        for i in range(len(img)):
+            if i % width == 0:
+                render += '\n'
+            if img[i] > threshold:
+                render += '@'
+            else:
+                render += '.'
+        return render

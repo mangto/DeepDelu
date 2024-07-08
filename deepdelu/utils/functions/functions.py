@@ -16,3 +16,9 @@ def load_model(path):
     with open(path, "rb") as file:
         model = load(file)
     return model
+
+def one_hot_vector(index:int, size:int) -> numpy.ndarray:
+    y = numpy.zeros((size, ))
+    y[index] = 1.
+
+    return y

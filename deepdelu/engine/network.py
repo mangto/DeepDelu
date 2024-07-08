@@ -22,6 +22,7 @@ class network:
         self.layers: list = []
         self.compiled: bool = False
         self.loss = MSE
+        self.optimizer = None
         self.activation = []
 
     def add_layer(self, *layer:dense) -> None:
@@ -41,7 +42,7 @@ class network:
                 continue
             self.layers.append(lay)
 
-    def compile(self, loss=MSE) -> bool:
+    def compile(self, loss=MSE, optimizer=None) -> bool:
         '''
         Compile Network.
         This function initalizes layers' weights and biases.
@@ -56,6 +57,7 @@ class network:
         try:
             
             self.loss = loss
+            self.optimizer = optimizer
 
             layer: dense
             previous_layer: dense = None
@@ -129,10 +131,11 @@ class network:
             )
             continue
 
-
     def update(self):
         assert self.compiled, "Network must be compied before using"
         
+        lrate = self.lrate if not self.optimizer else self.optimizer()
+
         layer: dense
         for layer in self.layers:
             layer.update(self.lrate)
