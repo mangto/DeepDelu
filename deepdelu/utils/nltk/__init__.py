@@ -1,0 +1,1 @@
+from deepdelu.utils.nltk import korean

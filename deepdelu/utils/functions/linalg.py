@@ -1,7 +1,7 @@
 import numpy as np
 from deepdelu.engine.tensor import Tensor
 
-def norm(array: np.ndarray, p: float = 2.) -> float:
+def norm(array: np.ndarray, p: float = 2.) -> Tensor:
     '''
     Lp Norm
      * array: tuple | list | np.array | np.ndarray | Tensor

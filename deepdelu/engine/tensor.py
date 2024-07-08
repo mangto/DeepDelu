@@ -83,7 +83,7 @@ class Tensor:
     def __pow__(self, value):
         return Tensor(value ** self.data)
     
-    def __matmul__(self, value):
+    def __rmatmul__(self, value):
         return Tensor(value @ self.data)
     
     

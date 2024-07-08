@@ -4,6 +4,9 @@ from pathlib import Path
 from deepdelu import research
 from deepdelu.utils import *
 from deepdelu.engine.tensor import Tensor
+from deepdelu.engine.ahocorasick import *
+from deepdelu.engine import layer
+from deepdelu.engine.network import network
 
 __all__ = [
     'research'
