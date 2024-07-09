@@ -1,13 +1,10 @@
 import numpy as np
 
-from deepdelu.utils.activation_functions import *
-from deepdelu.utils.functions import *
-
 class flatten:
-    def __init__(self, InputShape:tuple[int, int]=None) -> None:
-        self.InputShape = InputShape
+    def __init__(self, size:tuple[int, int]=None) -> None:
+        self.size = size
 
-        self.size = np.prod(InputShape)
+        self.size = np.prod(size)
         
         pass
 

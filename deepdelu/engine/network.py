@@ -1,6 +1,8 @@
 import numpy as np
+from tqdm import tqdm
 
 from deepdelu.utils.activation_functions import *
+from deepdelu.utils.functions import *
 from deepdelu.utils.losses import *
 from deepdelu.utils.system import *
 from deepdelu.engine.layer import *
@@ -78,15 +80,15 @@ class network:
             print(e)
             return False
 
-    def forward(self, x:np.ndarray):
+    def forward(self, x:np.ndarray) -> np.ndarray:
         '''
         Feed Forward Network.
 
         Parameters:
-        x (np.ndarray): input value.
+        x (ndarray): input value.
 
         Returns:
-        np.ndarray: output of network.
+        ndarray: output of network.
         '''
         assert self.compiled, "Network must be compied before using"
 
@@ -105,14 +107,24 @@ class network:
         Feed Forward Network.
 
         Parameters:
-        x (np.ndarray): input value.
+        x (ndarray): input value.
 
         Returns:
-        np.ndarray: output of network.
+        ndarray: output of network.
         '''
         return self.forward(x)
 
     def backward(self, y_true:np.ndarray, y_pred:np.ndarray) -> None:
+        '''
+        Backpropagation Process.
+
+        Parameters:
+        y_true (ndarray): answer
+        y_pred (ndarray): prediction
+
+        Returns:
+        None
+        '''
         assert self.compiled, "Network must be compied before using"
         
         y_true = np.array(y_true)
@@ -131,10 +143,14 @@ class network:
             )
             continue
 
-    def update(self):
+    def update(self) -> None:
+        '''
+        Update Network.
+        You must run this process to train network.
+        '''
         assert self.compiled, "Network must be compied before using"
         
-        lrate = self.lrate if not self.optimizer else self.optimizer()
+        self.lrate = self.lrate if not self.optimizer else self.optimizer()
 
         layer: dense
         for layer in self.layers:
@@ -143,20 +159,102 @@ class network:
     def compute_loss(self, y_true:np.ndarray, y_pred:np.ndarray,
                      derivative:bool=False
                      ) -> float:
+        '''
+        Compute loss with own loss function.
+        Default loss functions is MSE.
+        You can change it when .compile()
+
+        Parameters:
+        y_true  (ndarray): answer
+        y_pred  (ndarray): prediction
+        derivative (bool): whether compute derivative or not.
+
+        Returns:
+        float|ndarray: computed result.
+
+        '''
         assert self.compiled, "Network must be compied before using"
 
         loss = self.loss(y_true, y_pred, derivative)
         
         return loss
 
-    def train(self):
+    def train(self,
+              x_train:np.ndarray, y_train:np.ndarray, epoch:int,
+              ShowLoss:bool=True,
+              SaveModel:bool=True, ModelPath:str=".\\model.pkl"
+              ) -> None:
+        '''
+        Train network
+
+        Parameters:
+        x_train (ndarray): train input
+        y_train (ndarray): answer
+        ShowLoss   (bool): whether to show loss or not.
+        SaveModel  (bool): whether to save model or not.
+        ModelPath   (str): path to save model.
+
+        Returns:
+        None
+        '''
         assert self.compiled, "Network must be compied before using"
-        ...
+        assert len(x_train) == len(y_train), "Length of x_train and y_train must be same"
+        assert type(epoch) == int, "Invalid epoch size"
+
+        count = len(x_train)
+
+        for epc in range(epoch):
+
+            loss = 0
+            
+            for i in tqdm(range(count)):
+
+                X, Y = x_train[i], y_train[i]
+
+                pred = self.forward(X)
+                self.backward(Y, pred)
+                self.update()
+
+                loss += self.compute_loss(Y, pred)
+
+                continue
+
+            if(ShowLoss): print(f"epoch: {epc}    loss: {loss}")
+            if(SaveModel): save_model(self, ModelPath)
+            continue
+
+        return
     
-    def predict(self):
+    def evaluate(self,
+                 x_test:np.ndarray, y_test:np.ndarray,
+                 ShowResult: bool = True
+                 ) -> tuple[float, float]:
+        '''
+        Evaluate model with test datasets
+
+        Parameters:
+        x_test  (ndarray): test input
+        y_test  (ndarray): answer
+        ShowResult (bool): whether to show result or not
+
+        Returns:
+        tupele[float, float]: loss, accuracy
+        '''
+
         assert self.compiled, "Network must be compied before using"
-        ...
-    
-    def evaluate(self):
-        assert self.compiled, "Network must be compied before using"
-        ...
+
+        count = len(y_test)
+        loss = 0
+        correct = 0
+        for i in tqdm(range(count)):
+            X, Y = x_test[i], y_test[i]
+
+            pred = self.forward(X)
+            loss += self.compute_loss(Y, pred)
+            correct += pred.argmax() == Y.argmax()
+
+        accuracy = correct/count
+
+        if (ShowResult): print(f"loss: {loss}    accuracy: {round(accuracy*100, 3)}% ({correct}/{count})")
+        
+        return loss, accuracy
